@@ -1,0 +1,3 @@
+# Only needed once a Tier 1 encoder is trained (build with WITH_ENCODER=1).
+torch==2.7.0
+transformers==4.51.3

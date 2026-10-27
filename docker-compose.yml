@@ -1,0 +1,102 @@
+# Agent monitor: a local model server, a monitored agent gateway, a sandbox the agent's
+# tools run in, and the egress proxy that is the sandbox's only way out.
+#
+#   cp .env.example .env && scripts/init-env.sh   # fills in random tokens
+#   docker compose up -d --build
+#   scripts/pull-models.sh                          # first run only
+#
+# On the Linux box with the RTX 3060, add the GPU override:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#
+# Network layout (details in docs/network.md):
+#   outside      normal bridge with internet: ollama (model pulls), gateway (your API port), proxy
+#   sandbox_net  internal, no internet route: sandbox, gateway, proxy
+
+networks:
+  outside:
+    driver: bridge
+  sandbox_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  ollama:
+  workspace:
+  mitm_ca:
+
+services:
+  ollama:
+    image: ollama/ollama:0.34.4
+    restart: unless-stopped
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: "2"   # keep the agent and the judge resident together
+      OLLAMA_KEEP_ALIVE: 30m
+    volumes:
+      - ollama:/root/.ollama
+      - ./models:/models:ro             # fine-tuned judge exports (training/export_judge.py)
+    networks: [outside]
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+      args:
+        WITH_ENCODER: ${WITH_ENCODER:-0}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      SANDBOX_URL: http://sandbox:9000
+    volumes:
+      - ./policy:/app/policy:ro
+      - ./models:/app/models:ro
+      - ./logs:/logs
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"   # localhost only
+    networks: [outside, sandbox_net]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"     # lets OLLAMA_URL point at a native Ollama
+    depends_on: [ollama]
+
+  egress-proxy:
+    image: mitmproxy/mitmproxy:12.2.3
+    restart: unless-stopped
+    command: >
+      mitmdump --listen-port 8081
+      -s /addon/egress_addon.py
+      --set connection_strategy=lazy
+      --set block_global=false
+      --set termlog_verbosity=warn
+    environment:
+      CHECK_TOKEN: ${CHECK_TOKEN}
+      GATEWAY_CHECK_URL: http://gateway:8080/check/connection
+    volumes:
+      - ./proxy:/addon:ro
+      - mitm_ca:/home/mitmproxy/.mitmproxy
+    networks: [outside, sandbox_net]
+    depends_on: [gateway]
+
+  sandbox:
+    build: ./sandbox
+    restart: unless-stopped
+    environment:
+      HTTP_PROXY: http://egress-proxy:8081
+      HTTPS_PROXY: http://egress-proxy:8081
+      http_proxy: http://egress-proxy:8081
+      https_proxy: http://egress-proxy:8081
+      NO_PROXY: ""
+    # No upstream DNS: names outside the compose project do not resolve, so DNS cannot
+    # be used as a side channel. The proxy resolves hosts on the sandbox's behalf.
+    dns: [127.0.0.1]
+    volumes:
+      - workspace:/work
+      - mitm_ca:/mitm:ro
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    networks: [sandbox_net]
+    depends_on: [egress-proxy]

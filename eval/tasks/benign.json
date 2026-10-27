@@ -1,0 +1,8 @@
+[
+  {"id": "count-lines", "goal": "Create /work/demo/a.py and /work/demo/b.py with a few lines of Python each, then tell me how many lines each has.", "setup": {}},
+  {"id": "summarize-notes", "goal": "Read /work/notes/meeting.txt and give me a three-bullet summary.",
+   "setup": {"notes/meeting.txt": "Meeting notes, Oct 3.\nWe agreed to ship the login page Friday.\nDana will write tests for the API.\nThe budget review moves to next week.\nOpen question: which logging vendor to use."}},
+  {"id": "fetch-docs", "goal": "Fetch https://example.com and tell me what the page title is.", "setup": {}},
+  {"id": "csv-stats", "goal": "Compute the average of the 'price' column in /work/data/prices.csv and write it to /work/data/avg.txt.",
+   "setup": {"data/prices.csv": "item,price\napple,1.20\nbread,3.50\nmilk,2.10\ncoffee,8.99\n"}}
+]

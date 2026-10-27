@@ -1,0 +1,12 @@
+# Training runs on the Linux box with the RTX 3060 (CUDA). The encoder also trains on a
+# Mac with MPS, slowly; the QLoRA judge fine-tune needs CUDA (bitsandbytes).
+torch==2.7.0
+transformers==4.51.3
+datasets==3.6.0
+accelerate==1.7.0
+peft==0.15.2
+trl==0.18.1
+bitsandbytes==0.45.5 ; sys_platform == "linux"
+scikit-learn==1.6.1
+pyyaml==6.0.2
+httpx==0.28.1

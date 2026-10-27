@@ -1,0 +1,11 @@
+.env
+logs/
+data/
+models/*
+!models/README.md
+__pycache__/
+*.pyc
+.venv/
+venv/
+training/out/
+eval/results/
